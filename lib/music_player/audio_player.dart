@@ -1,137 +1,196 @@
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
 
-MediaControl playControl = MediaControl(
-  androidIcon: 'drawable/play_arrow',
-  label: 'Play',
-  action: MediaAction.play,
-);
-
-MediaControl pauseControl = MediaControl(
-  androidIcon: 'drawable/pause',
-  label: 'Pause',
-  action: MediaAction.pause,
-);
-
-MediaControl skipToNextControl = MediaControl(
-  androidIcon: 'drawable/skip_to_next',
-  label: 'Next',
-  action: MediaAction.skipToNext,
-);
-
-MediaControl skipToPreviousControl = MediaControl(
-  androidIcon: 'drawable/skip_to_previous',
-  label: 'Previous',
-  action: MediaAction.skipToPrevious,
-);
-
-MediaControl stopControl = MediaControl(
-  androidIcon: 'drawable/stop',
-  label: 'Stop',
-  action: MediaAction.stop,
-);
-
 class AudioPlayerTask extends BackgroundAudioTask {
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  AudioPlayer _player = new AudioPlayer();
+  AudioProcessingState _skipState;
+  Seeker _seeker;
+  StreamSubscription<PlaybackEvent> _eventSubscription;
+
+  MediaItem audio;
 
   @override
   Future<void> onStart(Map<String, dynamic> params) async {
-    AudioServiceBackground.setState(
-        controls: [pauseControl, stopControl],
-        playing: true,
-        processingState: AudioProcessingState.connecting);
-    // Connect to the URL
-    await _audioPlayer.setUrl(
-        'https://s3.amazonaws.com/scifri-episodes/scifri20181123-episode.mp3');
+    final session = await AudioSession.instance;
+    await session.configure(AudioSessionConfiguration.speech());
 
-    // Now we're ready to play
-    _audioPlayer.play();
-    // Broadcast that we're playing, and what controls are available.
-    AudioServiceBackground.setState(
-        controls: [pauseControl, stopControl],
-        playing: true,
-        processingState: AudioProcessingState.ready);
-  }
+    List mediaItems = params['data'];
+    MediaItem mediaItem = MediaItem.fromJson(mediaItems[0]);
 
-  @override
-  Future<void> onStop() async {
-    await AudioServiceBackground.setState(
-        controls: [],
-        playing: false,
-        processingState: AudioProcessingState.stopped);
-    // Shut down this background task
-    _audioPlayer.stop();
-    await super.onStop();
+    AudioServiceBackground.setMediaItem(
+      mediaItem,
+    );
+
+    _eventSubscription = _player.playbackEventStream.listen((event) {
+      _broadcastState();
+    });
+
+    _player.processingStateStream.listen((state) {
+      switch (state) {
+        case ProcessingState.completed:
+          print('eee');
+          //TODO: DISMISS AUDIO AFTER IT IS COMPLETED
+          onStop();
+          break;
+        case ProcessingState.ready:
+          _skipState = null;
+          break;
+        default:
+          break;
+      }
+    });
+
+    try {
+      await _player.load(AudioSource.uri(Uri.parse(mediaItem.id)));
+      onPlay();
+    } catch (e) {
+      print("Error: $e");
+      onStop();
+      return;
+    }
   }
 
   @override
   Future<void> onPlay() async {
     AudioServiceBackground.setState(
-        controls: [pauseControl, stopControl],
+        controls: [MediaControl.pause, MediaControl.stop],
         playing: true,
         processingState: AudioProcessingState.ready);
-    // Start playing audio.
-    _audioPlayer.play();
+    _player.play();
   }
 
   @override
   Future<void> onPause() async {
     AudioServiceBackground.setState(
-        controls: [playControl, stopControl],
+        controls: [MediaControl.pause, MediaControl.stop],
         playing: false,
         processingState: AudioProcessingState.ready);
-    // Pause the audio.
-    _audioPlayer.pause();
+    _player.pause();
   }
 
   @override
-  Future<void> onSkipToQueueItem(String mediaId) async {
-    _audioPlayer.setUrl(mediaId);
-    onPlay();
-  }
+  Future<void> onSeekTo(Duration position) => _player.seek(position);
 
   @override
-  Future<void> onSeekTo(Duration position) async {
-    _audioPlayer.seek(position);
-  }
+  Future<void> onFastForward() => _seekRelative(fastForwardInterval);
 
   @override
-  Future<void> onClick(MediaButton button) async {
-    _playPause();
+  Future<void> onRewind() => _seekRelative(-rewindInterval);
+
+  @override
+  Future<void> onSeekForward(bool begin) async => _seekContinuously(begin, 1);
+
+  @override
+  Future<void> onSeekBackward(bool begin) async => _seekContinuously(begin, -1);
+
+  @override
+  Future<void> onStop() async {
+    await _player.stop();
+    await _player.dispose();
+    _eventSubscription.cancel();
+    await _broadcastState();
+    await super.onStop();
   }
 
-  _playPause() {
-    if (AudioServiceBackground.state.playing) {
-      onPause();
-    } else {
-      onPlay();
+  Future<void> _seekRelative(Duration offset) async {
+    var newPosition = _player.position + offset;
+    if (newPosition < Duration.zero) newPosition = Duration.zero;
+    if (newPosition > audio.duration) newPosition = audio.duration;
+    await _player.seek(newPosition);
+  }
+
+  void _seekContinuously(bool begin, int direction) {
+    _seeker?.stop();
+    if (begin) {
+      _seeker = Seeker(_player, Duration(seconds: 10 * direction),
+          Duration(seconds: 1), audio)
+        ..start();
     }
   }
 
-/*  List<MediaControl> getControls() {
-    if (_playing) {
-      return [
-        skipToPreviousControl,
-        pauseControl,
-        stopControl,
-        skipToNextControl
-      ];
-    } else {
-      return [
-        skipToPreviousControl,
-        playControl,
-        stopControl,
-        skipToNextControl
-      ];
+  Future<void> _broadcastState() async {
+    await AudioServiceBackground.setState(
+      controls: [
+        MediaControl.skipToPrevious,
+        if (_player.playing) MediaControl.pause else MediaControl.play,
+        MediaControl.stop,
+        MediaControl.skipToNext,
+      ],
+      systemActions: [
+        MediaAction.seekTo,
+        MediaAction.seekForward,
+        MediaAction.seekBackward,
+      ],
+      processingState: _getProcessingState(),
+      playing: _player.playing,
+      position: _player.position,
+      bufferedPosition: _player.bufferedPosition,
+      speed: _player.speed,
+    );
+  }
+
+  AudioProcessingState _getProcessingState() {
+    if (_skipState != null) return _skipState;
+    switch (_player.processingState) {
+      case ProcessingState.none:
+        return AudioProcessingState.stopped;
+      case ProcessingState.loading:
+        return AudioProcessingState.connecting;
+      case ProcessingState.buffering:
+        return AudioProcessingState.buffering;
+      case ProcessingState.ready:
+        return AudioProcessingState.ready;
+      case ProcessingState.completed:
+        return AudioProcessingState.completed;
+      default:
+        throw Exception("Invalid state: ${_player.processingState}");
     }
-  }*/
+  }
+
+  Future<void> onMute(bool sound) async {
+    print('aca entre');
+    double volume = sound ? 1 : 0;
+    print(volume);
+    await _player.setVolume(volume);
+  }
 }
 
-class AudioState {
-  final List<MediaItem> queue;
+class Seeker {
+  final AudioPlayer player;
+  final Duration positionInterval;
+  final Duration stepInterval;
+  final MediaItem mediaItem;
+  bool _running = false;
+
+  Seeker(
+    this.player,
+    this.positionInterval,
+    this.stepInterval,
+    this.mediaItem,
+  );
+
+  start() async {
+    _running = true;
+    while (_running) {
+      Duration newPosition = player.position + positionInterval;
+      if (newPosition < Duration.zero) newPosition = Duration.zero;
+      if (newPosition > mediaItem.duration) newPosition = mediaItem.duration;
+      player.seek(newPosition);
+      await Future.delayed(stepInterval);
+    }
+  }
+
+  stop() {
+    _running = false;
+  }
+}
+
+class ScreenState {
   final MediaItem mediaItem;
   final PlaybackState playbackState;
-  AudioState(this.queue, this.mediaItem, this.playbackState);
+
+  ScreenState(this.mediaItem, this.playbackState);
 }

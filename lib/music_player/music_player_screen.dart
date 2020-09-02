@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:modal_progress_hud/modal_progress_hud.dart';
 import 'package:rxdart/rxdart.dart';
 
 import 'package:audio_player_background/music_player/audio_player.dart';
@@ -51,6 +52,7 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
   int anxietyBeforeValue;
 
   bool isComplete = false;
+  bool showSpinner = true;
 
   double position = 0.0;
   double duration = 0.0;
@@ -99,7 +101,12 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
 
     _audioPlayerStateSubscription = _screenStateStream.listen((event) async {
       if (event?.playbackState?.processingState != null) {
-        if (event.playbackState.processingState ==
+        if (event.playbackState.processingState == AudioProcessingState.ready &&
+            showSpinner) {
+          setState(() {
+            showSpinner = false;
+          });
+        } else if (event.playbackState.processingState ==
                 AudioProcessingState.completed &&
             !isComplete) {
           isComplete = true;
@@ -119,46 +126,49 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.blueGrey,
-      appBar: AppBar(
-        title: Text('Audio Service Demo'),
-        leading: BackButton(
-          color: Colors.white,
-          onPressed: () {
-            AudioService.stop();
-            Navigator.pop(context);
-          },
+    return WillPopScope(
+      onWillPop: () async => true,
+      child: Scaffold(
+        backgroundColor: Colors.blueGrey,
+        appBar: AppBar(
+          title: Text('Audio Service Demo'),
+          leading: BackButton(
+            color: Colors.white,
+            onPressed: () {
+              AudioService.stop();
+              Navigator.pop(context);
+            },
+          ),
         ),
-      ),
-      body: Container(
-        child: StreamBuilder<ScreenState>(
-          stream: _screenStateStream,
-          builder: (context, snapshot) {
-            final screenState = snapshot.data;
-            final mediaItem = screenState?.mediaItem;
-            final state = screenState?.playbackState;
-            final processingState =
-                state?.processingState ?? AudioProcessingState.none;
-            final playing = state?.playing ?? false;
+        body: ModalProgressHUD(
+          inAsyncCall: showSpinner,
+          child: Container(
+            child: StreamBuilder<ScreenState>(
+              stream: _screenStateStream,
+              builder: (context, snapshot) {
+                final screenState = snapshot.data;
+                final mediaItem = screenState?.mediaItem;
+                final state = screenState?.playbackState;
+                final playing = state?.playing ?? false;
 
-            return Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (mediaItem?.title != null) Text(mediaItem.title),
-                Row(
+                return Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    if (playing) pauseButton() else playButton(),
-                    stopButton(),
+                    Text(currentRecording),
+                    Text(currentPhase),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (playing) pauseButton() else playButton(),
+                        stopButton(),
+                      ],
+                    ),
+                    positionIndicator(mediaItem, state),
                   ],
-                ),
-                positionIndicator(mediaItem, state),
-                Text("Processing state: " +
-                    "$processingState".replaceAll(RegExp(r'^.*\.'), '')),
-              ],
-            );
-          },
+                );
+              },
+            ),
+          ),
         ),
       ),
     );

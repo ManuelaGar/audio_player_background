@@ -39,6 +39,8 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
       BehaviorSubject.seeded(null);
   AudioPlayer _player = new AudioPlayer();
 
+  StreamSubscription _audioPlayerStateSubscription;
+
   String currentRecording;
   String currentPhase;
   String currentRecordingFormatted;
@@ -47,6 +49,8 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
   String lastScreen;
   int painBeforeValue;
   int anxietyBeforeValue;
+
+  bool isComplete = false;
 
   double position = 0.0;
   double duration = 0.0;
@@ -70,7 +74,7 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
 
   initAudio() async {
     var dur = await _player.setUrl(songUrl);
-    this.duration = dur.inMilliseconds.toDouble();
+    duration = dur.inMilliseconds.toDouble();
 
     audio = MediaItem(
       id: songUrl,
@@ -92,6 +96,25 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
       androidEnableQueue: false,
       params: params,
     );
+
+    _audioPlayerStateSubscription = _screenStateStream.listen((event) async {
+      if (event?.playbackState?.processingState != null) {
+        if (event.playbackState.processingState ==
+                AudioProcessingState.completed &&
+            !isComplete) {
+          isComplete = true;
+          await AudioService.stop();
+          Navigator.pop(context);
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    _audioPlayerStateSubscription.cancel();
+    super.dispose();
   }
 
   @override
@@ -181,6 +204,7 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
               snapshot.data ?? state.currentPosition.inMilliseconds.toDouble();
           int pos = (position / 1000).roundToDouble().toInt();
           int dur = (duration / 1000).roundToDouble().toInt();
+
           return Column(
             children: [
               SliderTheme(
@@ -215,16 +239,26 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
     } else {
       return Column(
         children: [
-          Slider(
-            min: 0.0,
-            max: duration,
-            value: 0.0,
-            onChanged: (value) {
-              _dragPositionSubject.add(value);
-            },
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: Colors.white,
+              inactiveTrackColor: Colors.white38,
+              trackHeight: 3.0,
+              thumbShape: RoundSliderThumbShape(enabledThumbRadius: 8.0),
+              overlayShape: RoundSliderOverlayShape(overlayRadius: 13.0),
+              thumbColor: Color(0xFFE9EAFF),
+              overlayColor: Color(0xFFE9EAFF).withOpacity(0.4),
+            ),
+            child: Slider(
+              min: 0.0,
+              max: duration,
+              value: 0.0,
+              onChanged: (value) {
+                _dragPositionSubject.add(value);
+              },
+            ),
           ),
-          Text(
-              '${Duration(seconds: position.toInt())}/${Duration(seconds: duration.toInt())}'),
+          Text('${Duration.zero}/${Duration.zero}'),
         ],
       );
     }

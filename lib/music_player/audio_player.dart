@@ -31,9 +31,7 @@ class AudioPlayerTask extends BackgroundAudioTask {
     _player.processingStateStream.listen((state) {
       switch (state) {
         case ProcessingState.completed:
-          print('eee');
-          //TODO: DISMISS AUDIO AFTER IT IS COMPLETED
-          onStop();
+          /*onStop();*/
           break;
         case ProcessingState.ready:
           _skipState = null;

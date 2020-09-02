@@ -7,6 +7,7 @@ import 'package:modal_progress_hud/modal_progress_hud.dart';
 import 'package:rxdart/rxdart.dart';
 
 import 'package:audio_player_background/music_player/audio_player.dart';
+import 'package:audio_player_background/music_player/audio_duration_indicators.dart';
 
 class PlayMusicScreen extends StatefulWidget {
   PlayMusicScreen({
@@ -119,8 +120,8 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
 
   @override
   void dispose() {
-    _player.dispose();
     _audioPlayerStateSubscription.cancel();
+    _player.dispose();
     super.dispose();
   }
 
@@ -241,7 +242,10 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
                   },
                 ),
               ),
-              Text("${Duration(seconds: pos)}/${Duration(seconds: dur)}"),
+              AudioDurationIndicators(
+                position: Duration(seconds: pos),
+                duration: Duration(seconds: dur),
+              ),
             ],
           );
         },
@@ -268,7 +272,10 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
               },
             ),
           ),
-          Text('${Duration.zero}/${Duration.zero}'),
+          AudioDurationIndicators(
+            position: Duration.zero,
+            duration: Duration.zero,
+          ),
         ],
       );
     }

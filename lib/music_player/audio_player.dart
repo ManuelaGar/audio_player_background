@@ -149,13 +149,6 @@ class AudioPlayerTask extends BackgroundAudioTask {
         throw Exception("Invalid state: ${_player.processingState}");
     }
   }
-
-  Future<void> onMute(bool sound) async {
-    print('aca entre');
-    double volume = sound ? 1 : 0;
-    print(volume);
-    await _player.setVolume(volume);
-  }
 }
 
 class Seeker {

@@ -20,17 +20,10 @@ class _MainScreenState extends State<MainScreen> {
   double position = 0.0;
   double duration = 0.0;
 
-  bool isMuted = false;
+  String songUrl =
+      'https://s3.amazonaws.com/scifri-episodes/scifri20181123-episode.mp3';
 
-  MediaItem audio = MediaItem(
-    id: "https://s3.amazonaws.com/scifri-episodes/scifri20181123-episode.mp3",
-    album: "Science Friday",
-    title: "A Salute To Head-Scratching Science",
-    artist: "Science Friday and WNYC Studios",
-    duration: Duration(milliseconds: 5739820),
-    artUri:
-        "https://media.wnyc.org/i/1400/1400/l/80/1/ScienceFriday_WNYCStudios_1400.jpg",
-  );
+  MediaItem audio;
 
   @override
   void initState() {
@@ -39,6 +32,19 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   initAudio() async {
+    var dur = await _player.setUrl(songUrl);
+    this.duration = dur.inMilliseconds.toDouble();
+
+    audio = MediaItem(
+      id: songUrl,
+      album: "Science Friday",
+      title: "A Salute To Head-Scratching Science",
+      artist: "Science Friday and WNYC Studios",
+      duration: dur,
+      artUri:
+          "https://media.wnyc.org/i/1400/1400/l/80/1/ScienceFriday_WNYCStudios_1400.jpg",
+    );
+
     var params = {
       'data': [audio.toJson()]
     };
@@ -50,9 +56,6 @@ class _MainScreenState extends State<MainScreen> {
       androidEnableQueue: false,
       params: params,
     );
-
-    var dur = await _player.setUrl(audio.id);
-    this.duration = dur.inMilliseconds.toDouble();
   }
 
   @override
@@ -61,6 +64,13 @@ class _MainScreenState extends State<MainScreen> {
       backgroundColor: Colors.blueGrey,
       appBar: AppBar(
         title: Text('Audio Service Demo'),
+        leading: BackButton(
+          color: Colors.white,
+          onPressed: () {
+            AudioService.stop();
+            Navigator.pop(context);
+          },
+        ),
       ),
       body: Container(
         child: StreamBuilder<ScreenState>(
@@ -82,7 +92,6 @@ class _MainScreenState extends State<MainScreen> {
                   children: [
                     if (playing) pauseButton() else playButton(),
                     stopButton(),
-                    isMuted ? notMuteButton() : muteButton(),
                   ],
                 ),
                 positionIndicator(mediaItem, state),
@@ -134,28 +143,6 @@ class _MainScreenState extends State<MainScreen> {
         onPressed: () {
           AudioService.seekTo(Duration.zero);
           AudioService.pause();
-        },
-      );
-
-  IconButton notMuteButton() => IconButton(
-        icon: Icon(Icons.volume_mute),
-        iconSize: 64.0,
-        onPressed: () async {
-          await _player.setVolume(1.0);
-          setState(() {
-            isMuted = false;
-          });
-        },
-      );
-
-  IconButton muteButton() => IconButton(
-        icon: Icon(Icons.volume_up),
-        iconSize: 64.0,
-        onPressed: () async {
-          await _player.setVolume(0.0);
-          setState(() {
-            isMuted = true;
-          });
         },
       );
 
@@ -214,7 +201,8 @@ class _MainScreenState extends State<MainScreen> {
               _dragPositionSubject.add(value);
             },
           ),
-          Text('$duration'),
+          Text(
+              '${Duration(seconds: position.toInt())}/${Duration(seconds: duration.toInt())}'),
         ],
       );
     }

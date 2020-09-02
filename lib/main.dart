@@ -1,4 +1,4 @@
-import 'package:audio_player_background/music_player/music_player_screen.dart';
+import 'package:audio_player_background/music_player/play_music_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:audio_service/audio_service.dart';
 

@@ -17,11 +17,19 @@ class MyApp extends StatelessWidget {
 }
 
 class FirstScreen extends StatefulWidget {
+  static const id = 'select_meditation_screen';
   @override
   _FirstScreenState createState() => _FirstScreenState();
 }
 
 class _FirstScreenState extends State<FirstScreen> {
+  String currentRecording = 'Waiting Meditation';
+  String currentPhase = 'Surgery';
+  String currentRecordingFormatted = 'waiting_meditation';
+  String kUrl =
+      'https://firebasestorage.googleapis.com/v0/b/boabab-24f46.appspot.com/o/songs%2Fplaylist_en%2Fsurgery%2Fwaiting_meditation.mp3?alt=media&token=f31e9b21-32b5-4d06-9042-0645136f9eb1';
+  String bgImage = 'amor_divino';
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -36,7 +44,14 @@ class _FirstScreenState extends State<FirstScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => MainScreen(),
+                  builder: (context) => PlayMusicScreen(
+                    selectedRecording: currentRecording,
+                    selectedPhase: currentPhase,
+                    selectedRecordingFormatted: currentRecordingFormatted,
+                    kUrl: kUrl,
+                    backgroundImage: bgImage,
+                    originScreen: FirstScreen.id,
+                  ),
                 ),
               );
             },

@@ -7,26 +7,63 @@ import 'package:rxdart/rxdart.dart';
 
 import 'package:audio_player_background/music_player/audio_player.dart';
 
-class MainScreen extends StatefulWidget {
+class PlayMusicScreen extends StatefulWidget {
+  PlayMusicScreen({
+    @required this.selectedRecording,
+    @required this.selectedPhase,
+    @required this.selectedRecordingFormatted,
+    @required this.kUrl,
+    @required this.backgroundImage,
+    @required this.originScreen,
+    this.painBefore,
+    this.anxietyBefore,
+  });
+
+  static const id = 'play_music_screen';
+
+  final String selectedRecording;
+  final String selectedPhase;
+  final String selectedRecordingFormatted;
+  final String kUrl;
+  final String backgroundImage;
+  final String originScreen;
+  final int painBefore;
+  final int anxietyBefore;
+
   @override
-  _MainScreenState createState() => _MainScreenState();
+  _PlayMusicScreenState createState() => _PlayMusicScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _PlayMusicScreenState extends State<PlayMusicScreen> {
   final BehaviorSubject<double> _dragPositionSubject =
       BehaviorSubject.seeded(null);
   AudioPlayer _player = new AudioPlayer();
 
+  String currentRecording;
+  String currentPhase;
+  String currentRecordingFormatted;
+  String songUrl;
+  String bgImage;
+  String lastScreen;
+  int painBeforeValue;
+  int anxietyBeforeValue;
+
   double position = 0.0;
   double duration = 0.0;
-
-  String songUrl =
-      'https://s3.amazonaws.com/scifri-episodes/scifri20181123-episode.mp3';
 
   MediaItem audio;
 
   @override
   void initState() {
+    currentRecording = widget.selectedRecording;
+    currentPhase = widget.selectedPhase;
+    currentRecordingFormatted = widget.selectedRecordingFormatted;
+    songUrl = widget.kUrl;
+    bgImage = widget.backgroundImage;
+    lastScreen = widget.originScreen;
+    painBeforeValue = widget.painBefore;
+    anxietyBeforeValue = widget.anxietyBefore;
+
     initAudio();
     super.initState();
   }
@@ -37,12 +74,11 @@ class _MainScreenState extends State<MainScreen> {
 
     audio = MediaItem(
       id: songUrl,
-      album: "Science Friday",
-      title: "A Salute To Head-Scratching Science",
-      artist: "Science Friday and WNYC Studios",
+      album: "Healing Presents",
+      title: currentRecording,
+      artist: currentPhase,
       duration: dur,
-      artUri:
-          "https://media.wnyc.org/i/1400/1400/l/80/1/ScienceFriday_WNYCStudios_1400.jpg",
+      artUri: "http://healingpresents.co/images/Logo_Healing_Big@3x.png",
     );
 
     var params = {
@@ -97,20 +133,6 @@ class _MainScreenState extends State<MainScreen> {
                 positionIndicator(mediaItem, state),
                 Text("Processing state: " +
                     "$processingState".replaceAll(RegExp(r'^.*\.'), '')),
-                StreamBuilder(
-                  stream: AudioService.customEventStream,
-                  builder: (context, snapshot) {
-                    return Text("custom event: ${snapshot.data}");
-                  },
-                ),
-                StreamBuilder<bool>(
-                  stream: AudioService.notificationClickEventStream,
-                  builder: (context, snapshot) {
-                    return Text(
-                      'Notification Click Status: ${snapshot.data}',
-                    );
-                  },
-                ),
               ],
             );
           },

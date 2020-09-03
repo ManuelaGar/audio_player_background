@@ -45,7 +45,7 @@ class AudioPlayerTask extends BackgroundAudioTask {
       if (audioSource == 'web') {
         await _player.load(AudioSource.uri(Uri.parse(mediaItem.id)));
       } else if (audioSource == 'local') {
-        await _player.setAsset('audios/naturaleza.mp3');
+        await _player.setFilePath(mediaItem.id);
       }
       onPlay();
     } catch (e) {

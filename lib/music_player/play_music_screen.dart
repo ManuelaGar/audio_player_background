@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:http/http.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:modal_progress_hud/modal_progress_hud.dart';
@@ -72,6 +73,9 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
   bool isDownloaded = false;
   bool isComplete = false;
   bool showSpinner = true;
+  bool isFavorite = false;
+  List<String> likedSongs;
+
   String localFilePath;
 
   Color activeIconColor = Colors.white;
@@ -104,12 +108,12 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
   initAudio() async {
     _findDownloadedFile().then((_) async {
       var dur = isDownloaded
-          ? await _player.setAsset('audios/naturaleza.mp3')
+          ? await _player.setFilePath(localFilePath)
           : await _player.setUrl(songUrl);
       duration = dur.inMilliseconds.toDouble();
 
       audio = MediaItem(
-        id: songUrl,
+        id: isDownloaded ? localFilePath : songUrl,
         album: "Healing Presents",
         title: currentRecording,
         artist: currentPhase,
@@ -384,7 +388,40 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
                               icon: isPlaying ? Icons.pause : Icons.play_arrow,
                               containerSize: 70.0,
                             ),
-                            //if (playing) pauseButton() else playButton(),
+                            Container(
+                              width: 35.0,
+                              child: GestureDetector(
+                                onTap: () {
+                                  /*FirebaseFunctions().updateUserLikedSongs(
+                                      context,
+                                      l10n,
+                                      currentPhase,
+                                      currentRecording,
+                                      myLocale);*/
+                                  setState(() {
+                                    isFavorite = !isFavorite;
+                                  });
+                                  /*isFavorite
+                                      ? showAlertDialog(
+                                      context,
+                                      l10n.addedLikedSongsAlert,
+                                      Icons.check,
+                                      Colors.green)
+                                      : showAlertDialog(
+                                      context,
+                                      l10n.removedLikedSongsAlert,
+                                      Icons.close,
+                                      Colors.green);*/
+                                },
+                                child: Icon(
+                                  isFavorite
+                                      ? FontAwesomeIcons.solidHeart
+                                      : FontAwesomeIcons.heart,
+                                  color: activeIconColor,
+                                  size: 25.0,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                         positionIndicator(),

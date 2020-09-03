@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:math';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart';
@@ -57,6 +56,7 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
       BehaviorSubject.seeded(null);
   AudioPlayer _player = new AudioPlayer();
 
+  StreamSubscription _positionSubscription;
   StreamSubscription _audioPlayerStateSubscription;
 
   String currentRecording;
@@ -103,14 +103,9 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
 
   initAudio() async {
     _findDownloadedFile().then((_) async {
-      print('init audio');
-      print(localFilePath);
-      print(isDownloaded);
       var dur = isDownloaded
           ? await _player.setAsset('audios/naturaleza.mp3')
           : await _player.setUrl(songUrl);
-
-      print(dur);
       duration = dur.inMilliseconds.toDouble();
 
       audio = MediaItem(
@@ -136,6 +131,19 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
       );
 
       setState(() => playerState = PlayerState.playing);
+
+      _positionSubscription =
+          Rx.combineLatest2<ScreenState, double, ScreenState>(
+              _screenStateStream,
+              Stream.periodic(Duration(milliseconds: 200)),
+              (screenState, _) => screenState).listen((event) {
+        if (event?.playbackState?.currentPosition != null) {
+          setState(() {
+            position =
+                event.playbackState.currentPosition.inMilliseconds.toDouble();
+          });
+        }
+      });
 
       _audioPlayerStateSubscription = _screenStateStream.listen((event) async {
         if (event?.playbackState?.processingState != null) {
@@ -170,16 +178,12 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
   @override
   void dispose() {
     _audioPlayerStateSubscription.cancel();
+    _positionSubscription.cancel();
     _player.dispose();
     super.dispose();
   }
 
   play() {
-    AudioService.play();
-    setState(() => playerState = PlayerState.playing);
-  }
-
-  _playLocal() {
     AudioService.play();
     setState(() => playerState = PlayerState.playing);
   }
@@ -225,11 +229,7 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
         isDownloaded = true;
         downloadEnabled = true;
       });
-      //_playLocal();
     }
-    /*else {
-      play();
-    }*/
   }
 
   Future _deleteDownloadedFile(/*l10n*/) async {
@@ -414,57 +414,48 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
       );
 
   Widget positionIndicator(MediaItem mediaItem, PlaybackState state) {
-    double seekPos = 0.0;
-    if (state != null) {
-      return StreamBuilder(
-        stream: Rx.combineLatest2<double, double, double>(
-            _dragPositionSubject.stream,
-            Stream.periodic(Duration(milliseconds: 200)),
-            (dragPosition, _) => dragPosition),
-        builder: (context, snapshot) {
-          position =
-              snapshot.data ?? state.currentPosition.inMilliseconds.toDouble();
-          int pos = (position / 1000).roundToDouble().toInt();
-          int dur = (duration / 1000).roundToDouble().toInt();
+    int pos = (position / 1000).roundToDouble().toInt();
+    int dur = (duration / 1000).roundToDouble().toInt();
 
-          return Column(
-            children: [
-              SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  activeTrackColor: Colors.white,
-                  inactiveTrackColor: Colors.white38,
-                  trackHeight: 3.0,
-                  thumbShape: RoundSliderThumbShape(enabledThumbRadius: 8.0),
-                  overlayShape: RoundSliderOverlayShape(overlayRadius: 13.0),
-                  thumbColor: Color(0xFFE9EAFF),
-                  overlayColor: Color(0xFFE9EAFF).withOpacity(0.4),
-                ),
-                child: Slider(
-                  min: 0.0,
-                  max: duration,
-                  value: duration > position ? position : 0.0,
-                  onChanged: (value) {
-                    pos = (value / 1000).roundToDouble().toInt();
-                    setState(() {
-                      position = (value / 1000).roundToDouble();
-                      AudioService.seekTo(
-                          Duration(milliseconds: value.toInt()));
-                    });
-                    /*_dragPositionSubject.add(value);*/
-                  },
-                  /*onChangeEnd: (value) {
-                    AudioService.seekTo(Duration(milliseconds: value.toInt()));
-                    seekPos = value;
-                    _dragPositionSubject.add(null);
-                  },*/
-                ),
-              ),
-              AudioDurationIndicators(
-                position: Duration(seconds: pos),
-                duration: Duration(seconds: dur),
-              ),
-            ],
-          );
+    return Column(
+      children: [
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            activeTrackColor: Colors.white,
+            inactiveTrackColor: Colors.white38,
+            trackHeight: 3.0,
+            thumbShape: RoundSliderThumbShape(enabledThumbRadius: 8.0),
+            overlayShape: RoundSliderOverlayShape(overlayRadius: 13.0),
+            thumbColor: Color(0xFFE9EAFF),
+            overlayColor: Color(0xFFE9EAFF).withOpacity(0.4),
+          ),
+          child: Slider(
+            min: 0.0,
+            max: duration,
+            value: duration > position ? position : 0.0,
+            onChanged: (value) {
+              pos = (value / 1000).roundToDouble().toInt();
+              setState(() {
+                position = (value / 1000).roundToDouble();
+                _dragPositionSubject.add(value);
+                AudioService.seekTo(Duration(milliseconds: value.toInt()));
+              });
+            },
+          ),
+        ),
+        AudioDurationIndicators(
+          position: Duration(seconds: pos),
+          duration: Duration(seconds: dur),
+        ),
+      ],
+    );
+  }
+  /*if (state != null) {
+      return StreamBuilder(
+        stream: Stream.periodic(Duration(milliseconds: 200)),
+        builder: (context, snapshot) {
+
+
         },
       );
     } else {
@@ -496,7 +487,7 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
         ],
       );
     }
-  }
+  }*/
 }
 
 void _audioPlayerTaskEntryPoint() async {

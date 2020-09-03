@@ -20,8 +20,6 @@ class AudioPlayerTask extends BackgroundAudioTask {
     List mediaItems = params['data'];
     MediaItem mediaItem = MediaItem.fromJson(mediaItems[0]);
     String audioSource = mediaItems[1];
-    print('On Start');
-    print(audioSource);
 
     AudioServiceBackground.setMediaItem(
       mediaItem,

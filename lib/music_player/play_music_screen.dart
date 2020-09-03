@@ -188,6 +188,20 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
     setState(() => playerState = PlayerState.playing);
   }
 
+  pause() {
+    AudioService.pause();
+    setState(() => playerState = PlayerState.paused);
+  }
+
+  stop() {
+    AudioService.seekTo(Duration.zero);
+    AudioService.pause();
+    setState(() {
+      playerState = PlayerState.stopped;
+      position = 0.0;
+    });
+  }
+
   Future<Uint8List> _loadFileBytes(String url, {OnError onError}) async {
     Uint8List bytes;
     try {
@@ -323,58 +337,58 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
                   Container(
                     margin:
                         EdgeInsets.symmetric(horizontal: 0.0, vertical: 20.0),
-                    child: StreamBuilder<ScreenState>(
-                      stream: _screenStateStream,
-                      builder: (context, snapshot) {
-                        final screenState = snapshot.data;
-                        final mediaItem = screenState?.mediaItem;
-                        final state = screenState?.playbackState;
-                        final playing = state?.playing ?? false;
-
-                        return Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 35.0,
-                                  child: GestureDetector(
-                                    onTap: isDownloaded
-                                        ? () {
-                                            _deleteDownloadedFile(/*l10n*/);
-                                          }
-                                        : () {
-                                            _loadFile(/*l10n*/);
-                                            setState(() {
-                                              downloadEnabled = false;
-                                            });
-                                          },
-                                    child: Icon(
-                                      isDownloaded
-                                          ? Icons.cloud_done
-                                          : Icons.cloud_download,
-                                      color: downloadEnabled
-                                          ? activeIconColor
-                                          : inactiveIconColor,
-                                      size: 30.0,
-                                    ),
-                                  ),
+                            Container(
+                              width: 35.0,
+                              child: GestureDetector(
+                                onTap: isDownloaded
+                                    ? () {
+                                        _deleteDownloadedFile(/*l10n*/);
+                                      }
+                                    : () {
+                                        _loadFile(/*l10n*/);
+                                        setState(() {
+                                          downloadEnabled = false;
+                                        });
+                                      },
+                                child: Icon(
+                                  isDownloaded
+                                      ? Icons.cloud_done
+                                      : Icons.cloud_download,
+                                  color: downloadEnabled
+                                      ? activeIconColor
+                                      : inactiveIconColor,
+                                  size: 30.0,
                                 ),
-                                SizedBox(
-                                  width: 5.0,
-                                ),
-                                SizedBox(
-                                  width: 5.0,
-                                ),
-                                stopButton(),
-                                if (playing) pauseButton() else playButton(),
-                              ],
+                              ),
                             ),
-                            positionIndicator(mediaItem, state),
+                            SizedBox(
+                              width: 5.0,
+                            ),
+                            Container(
+                              width: 55.0,
+                              child: AudioIconButton(
+                                onTap:
+                                    isPlaying || isPaused ? () => stop() : null,
+                                icon: Icons.stop,
+                                containerSize: 55.0,
+                              ),
+                            ),
+                            AudioIconButton(
+                              onTap: isPlaying ? () => pause() : () => play(),
+                              icon: isPlaying ? Icons.pause : Icons.play_arrow,
+                              containerSize: 70.0,
+                            ),
+                            //if (playing) pauseButton() else playButton(),
                           ],
-                        );
-                      },
+                        ),
+                        positionIndicator(),
+                      ],
                     ),
                   ),
                 ],
@@ -392,28 +406,7 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
           AudioService.playbackStateStream,
           (mediaItem, playbackState) => ScreenState(mediaItem, playbackState));
 
-  IconButton playButton() => IconButton(
-        icon: Icon(Icons.play_arrow),
-        iconSize: 64.0,
-        onPressed: AudioService.play,
-      );
-
-  IconButton pauseButton() => IconButton(
-        icon: Icon(Icons.pause),
-        iconSize: 64.0,
-        onPressed: AudioService.pause,
-      );
-
-  IconButton stopButton() => IconButton(
-        icon: Icon(Icons.stop),
-        iconSize: 64.0,
-        onPressed: () {
-          AudioService.seekTo(Duration.zero);
-          AudioService.pause();
-        },
-      );
-
-  Widget positionIndicator(MediaItem mediaItem, PlaybackState state) {
+  Widget positionIndicator() {
     int pos = (position / 1000).roundToDouble().toInt();
     int dur = (duration / 1000).roundToDouble().toInt();
 
@@ -450,44 +443,6 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
       ],
     );
   }
-  /*if (state != null) {
-      return StreamBuilder(
-        stream: Stream.periodic(Duration(milliseconds: 200)),
-        builder: (context, snapshot) {
-
-
-        },
-      );
-    } else {
-      return Column(
-        children: [
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              activeTrackColor: Colors.white,
-              inactiveTrackColor: Colors.white38,
-              trackHeight: 3.0,
-              thumbShape: RoundSliderThumbShape(enabledThumbRadius: 8.0),
-              overlayShape: RoundSliderOverlayShape(overlayRadius: 13.0),
-              thumbColor: Color(0xFFE9EAFF),
-              overlayColor: Color(0xFFE9EAFF).withOpacity(0.4),
-            ),
-            child: Slider(
-              min: 0.0,
-              max: duration,
-              value: 0.0,
-              onChanged: (value) {
-                _dragPositionSubject.add(value);
-              },
-            ),
-          ),
-          AudioDurationIndicators(
-            position: Duration.zero,
-            duration: Duration.zero,
-          ),
-        ],
-      );
-    }
-  }*/
 }
 
 void _audioPlayerTaskEntryPoint() async {

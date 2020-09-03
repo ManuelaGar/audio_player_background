@@ -19,6 +19,9 @@ class AudioPlayerTask extends BackgroundAudioTask {
 
     List mediaItems = params['data'];
     MediaItem mediaItem = MediaItem.fromJson(mediaItems[0]);
+    String audioSource = mediaItems[1];
+    print('On Start');
+    print(audioSource);
 
     AudioServiceBackground.setMediaItem(
       mediaItem,
@@ -31,7 +34,6 @@ class AudioPlayerTask extends BackgroundAudioTask {
     _player.processingStateStream.listen((state) {
       switch (state) {
         case ProcessingState.completed:
-          /*onStop();*/
           break;
         case ProcessingState.ready:
           _skipState = null;
@@ -42,7 +44,11 @@ class AudioPlayerTask extends BackgroundAudioTask {
     });
 
     try {
-      await _player.load(AudioSource.uri(Uri.parse(mediaItem.id)));
+      if (audioSource == 'web') {
+        await _player.load(AudioSource.uri(Uri.parse(mediaItem.id)));
+      } else if (audioSource == 'local') {
+        await _player.setAsset('audios/naturaleza.mp3');
+      }
       onPlay();
     } catch (e) {
       print("Error: $e");

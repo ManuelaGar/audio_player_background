@@ -1,13 +1,29 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 import 'dart:math';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:modal_progress_hud/modal_progress_hud.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:rxdart/rxdart.dart';
 
 import 'package:audio_player_background/music_player/audio_player.dart';
 import 'package:audio_player_background/music_player/audio_duration_indicators.dart';
+import 'package:audio_player_background/music_player/audio_icon_button.dart';
+import 'package:audio_player_background/music_player/show_alert.dart';
+
+typedef void OnError(Exception exception);
+enum PlayerState { stopped, playing, paused }
+
+const kMusicTitleTextStyle = TextStyle(
+  //fontFamily: 'Poppins',
+  color: Colors.white,
+  fontWeight: FontWeight.w500,
+  fontSize: 19.0,
+);
 
 class PlayMusicScreen extends StatefulWidget {
   PlayMusicScreen({
@@ -52,13 +68,23 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
   int painBeforeValue;
   int anxietyBeforeValue;
 
+  bool downloadEnabled = true;
+  bool isDownloaded = false;
   bool isComplete = false;
   bool showSpinner = true;
+  String localFilePath;
+
+  Color activeIconColor = Colors.white;
+  Color inactiveIconColor = Colors.white70;
 
   double position = 0.0;
   double duration = 0.0;
 
   MediaItem audio;
+
+  PlayerState playerState = PlayerState.stopped;
+  get isPlaying => playerState == PlayerState.playing;
+  get isPaused => playerState == PlayerState.paused;
 
   @override
   void initState() {
@@ -76,45 +102,68 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
   }
 
   initAudio() async {
-    var dur = await _player.setUrl(songUrl);
-    duration = dur.inMilliseconds.toDouble();
+    _findDownloadedFile().then((_) async {
+      print('init audio');
+      print(localFilePath);
+      print(isDownloaded);
+      var dur = isDownloaded
+          ? await _player.setAsset('audios/naturaleza.mp3')
+          : await _player.setUrl(songUrl);
 
-    audio = MediaItem(
-      id: songUrl,
-      album: "Healing Presents",
-      title: currentRecording,
-      artist: currentPhase,
-      duration: dur,
-      artUri: "http://healingpresents.co/images/Logo_Healing_Big@3x.png",
-    );
+      print(dur);
+      duration = dur.inMilliseconds.toDouble();
 
-    var params = {
-      'data': [audio.toJson()]
-    };
-    await AudioService.start(
-      backgroundTaskEntrypoint: _audioPlayerTaskEntryPoint,
-      androidNotificationChannelName: 'Audio Service Demo',
-      androidNotificationColor: 0xFF2196f3,
-      androidNotificationIcon: 'mipmap/ic_launcher',
-      androidEnableQueue: false,
-      params: params,
-    );
+      audio = MediaItem(
+        id: songUrl,
+        album: "Healing Presents",
+        title: currentRecording,
+        artist: currentPhase,
+        duration: dur,
+        artUri: "http://healingpresents.co/images/Logo_Healing_Big@3x.png",
+      );
 
-    _audioPlayerStateSubscription = _screenStateStream.listen((event) async {
-      if (event?.playbackState?.processingState != null) {
-        if (event.playbackState.processingState == AudioProcessingState.ready &&
-            showSpinner) {
-          setState(() {
-            showSpinner = false;
-          });
-        } else if (event.playbackState.processingState ==
-                AudioProcessingState.completed &&
-            !isComplete) {
-          isComplete = true;
-          await AudioService.stop();
-          Navigator.pop(context);
+      var params = {
+        'data': [audio.toJson(), isDownloaded ? 'local' : 'web']
+      };
+
+      await AudioService.start(
+        backgroundTaskEntrypoint: _audioPlayerTaskEntryPoint,
+        androidNotificationChannelName: 'Audio Service Demo',
+        androidNotificationColor: 0xFF2196f3,
+        androidNotificationIcon: 'mipmap/ic_launcher',
+        androidEnableQueue: false,
+        params: params,
+      );
+
+      setState(() => playerState = PlayerState.playing);
+
+      _audioPlayerStateSubscription = _screenStateStream.listen((event) async {
+        if (event?.playbackState?.processingState != null) {
+          if (event.playbackState.processingState ==
+                  AudioProcessingState.ready &&
+              showSpinner) {
+            setState(() {
+              showSpinner = false;
+            });
+          } else if (event.playbackState.processingState ==
+                  AudioProcessingState.stopped &&
+              !isComplete) {
+            setState(() => playerState = PlayerState.stopped);
+          } else if (event.playbackState.processingState ==
+                  AudioProcessingState.completed &&
+              !isComplete) {
+            isComplete = true;
+            await AudioService.stop();
+            Navigator.pop(context);
+          }
         }
-      }
+      }, onError: (msg) {
+        setState(() {
+          playerState = PlayerState.stopped;
+          duration = 0.0;
+          position = 0.0;
+        });
+      });
     });
   }
 
@@ -125,14 +174,106 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
     super.dispose();
   }
 
+  play() {
+    AudioService.play();
+    setState(() => playerState = PlayerState.playing);
+  }
+
+  _playLocal() {
+    AudioService.play();
+    setState(() => playerState = PlayerState.playing);
+  }
+
+  Future<Uint8List> _loadFileBytes(String url, {OnError onError}) async {
+    Uint8List bytes;
+    try {
+      bytes = await readBytes(url);
+    } on ClientException {
+      rethrow;
+    }
+    return bytes;
+  }
+
+  Future _loadFile(/*l10n*/) async {
+    final bytes = await _loadFileBytes(songUrl,
+        onError: (Exception exception) =>
+            print('_loadFile => exception $exception'));
+
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}/$currentRecordingFormatted.mp3');
+
+    await file.writeAsBytes(bytes);
+    if (await file.exists()) {
+      /*showAlertDialog(
+          context, l10n.successfulDownloadAlert, Icons.check, Colors.green);*/
+      setState(() {
+        localFilePath = file.path;
+        isDownloaded = true;
+        downloadEnabled = true;
+      });
+      //_playLocal();
+    }
+  }
+
+  Future _findDownloadedFile() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}/$currentRecordingFormatted.mp3');
+
+    if (await file.exists()) {
+      setState(() {
+        localFilePath = file.path;
+        isDownloaded = true;
+        downloadEnabled = true;
+      });
+      //_playLocal();
+    }
+    /*else {
+      play();
+    }*/
+  }
+
+  Future _deleteDownloadedFile(/*l10n*/) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}/$currentRecordingFormatted.mp3');
+
+    if (await file.exists()) {
+      try {
+        await file.delete();
+        /*showAlertDialog(
+            context, l10n.removeDownloadAlert, Icons.close, Colors.red);*/
+        setState(() {
+          isDownloaded = false;
+        });
+      } catch (e) {
+        print(e);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async => true,
       child: Scaffold(
-        backgroundColor: Colors.blueGrey,
+        backgroundColor: Colors.transparent,
+        extendBodyBehindAppBar: true,
         appBar: AppBar(
-          title: Text('Audio Service Demo'),
+          centerTitle: true,
+          flexibleSpace: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: <Color>[
+                  Colors.transparent,
+                  Colors.black.withOpacity(0.5)
+                ],
+              ),
+            ),
+          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: Text('Play Music'),
           leading: BackButton(
             color: Colors.white,
             onPressed: () {
@@ -144,30 +285,100 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
         body: ModalProgressHUD(
           inAsyncCall: showSpinner,
           child: Container(
-            child: StreamBuilder<ScreenState>(
-              stream: _screenStateStream,
-              builder: (context, snapshot) {
-                final screenState = snapshot.data;
-                final mediaItem = screenState?.mediaItem;
-                final state = screenState?.playbackState;
-                final playing = state?.playing ?? false;
-
-                return Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(currentRecording),
-                    Text(currentPhase),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (playing) pauseButton() else playButton(),
-                        stopButton(),
-                      ],
-                    ),
-                    positionIndicator(mediaItem, state),
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('images/bg_$bgImage.png'),
+                fit: BoxFit.cover,
+              ),
+            ),
+            child: Container(
+              padding: EdgeInsets.fromLTRB(15.0, 0, 15.0, 30.0),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[
+                    Colors.transparent,
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.5)
                   ],
-                );
-              },
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: <Widget>[
+                  Text(
+                    currentRecording,
+                    textAlign: TextAlign.center,
+                    style: kMusicTitleTextStyle,
+                  ),
+                  SizedBox(
+                    height: 5.0,
+                  ),
+                  Text(
+                    currentPhase,
+                    textAlign: TextAlign.center,
+                    style: kMusicTitleTextStyle,
+                  ),
+                  Container(
+                    margin:
+                        EdgeInsets.symmetric(horizontal: 0.0, vertical: 20.0),
+                    child: StreamBuilder<ScreenState>(
+                      stream: _screenStateStream,
+                      builder: (context, snapshot) {
+                        final screenState = snapshot.data;
+                        final mediaItem = screenState?.mediaItem;
+                        final state = screenState?.playbackState;
+                        final playing = state?.playing ?? false;
+
+                        return Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 35.0,
+                                  child: GestureDetector(
+                                    onTap: isDownloaded
+                                        ? () {
+                                            _deleteDownloadedFile(/*l10n*/);
+                                          }
+                                        : () {
+                                            _loadFile(/*l10n*/);
+                                            setState(() {
+                                              downloadEnabled = false;
+                                            });
+                                          },
+                                    child: Icon(
+                                      isDownloaded
+                                          ? Icons.cloud_done
+                                          : Icons.cloud_download,
+                                      color: downloadEnabled
+                                          ? activeIconColor
+                                          : inactiveIconColor,
+                                      size: 30.0,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 5.0,
+                                ),
+                                SizedBox(
+                                  width: 5.0,
+                                ),
+                                stopButton(),
+                                if (playing) pauseButton() else playButton(),
+                              ],
+                            ),
+                            positionIndicator(mediaItem, state),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -203,7 +414,7 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
       );
 
   Widget positionIndicator(MediaItem mediaItem, PlaybackState state) {
-    double seekPos;
+    double seekPos = 0.0;
     if (state != null) {
       return StreamBuilder(
         stream: Rx.combineLatest2<double, double, double>(
@@ -231,15 +442,21 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
                 child: Slider(
                   min: 0.0,
                   max: duration,
-                  value: seekPos ?? max(0.0, min(position, duration)),
+                  value: duration > position ? position : 0.0,
                   onChanged: (value) {
-                    _dragPositionSubject.add(value);
+                    pos = (value / 1000).roundToDouble().toInt();
+                    setState(() {
+                      position = (value / 1000).roundToDouble();
+                      AudioService.seekTo(
+                          Duration(milliseconds: value.toInt()));
+                    });
+                    /*_dragPositionSubject.add(value);*/
                   },
-                  onChangeEnd: (value) {
+                  /*onChangeEnd: (value) {
                     AudioService.seekTo(Duration(milliseconds: value.toInt()));
                     seekPos = value;
                     _dragPositionSubject.add(null);
-                  },
+                  },*/
                 ),
               ),
               AudioDurationIndicators(

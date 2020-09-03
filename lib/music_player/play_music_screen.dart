@@ -80,6 +80,7 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
 
   Color activeIconColor = Colors.white;
   Color inactiveIconColor = Colors.white70;
+  Color kBrandDarkBlue = Color(0xFF0066B1);
 
   double position = 0.0;
   double duration = 0.0;
@@ -345,51 +346,69 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 35.0,
-                              child: GestureDetector(
-                                onTap: isDownloaded
-                                    ? () {
-                                        _deleteDownloadedFile(/*l10n*/);
-                                      }
-                                    : () {
-                                        _loadFile(/*l10n*/);
-                                        setState(() {
-                                          downloadEnabled = false;
-                                        });
-                                      },
-                                child: Icon(
-                                  isDownloaded
-                                      ? Icons.cloud_done
-                                      : Icons.cloud_download,
-                                  color: downloadEnabled
-                                      ? activeIconColor
-                                      : inactiveIconColor,
-                                  size: 30.0,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: <Widget>[
+                            Expanded(
+                              flex: 6,
+                              child: Container(),
+                            ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 55.0,
+                                  child: GestureDetector(
+                                    onTap: isDownloaded
+                                        ? () {
+                                            _deleteDownloadedFile(/*l10n*/);
+                                          }
+                                        : () {
+                                            _loadFile(/*l10n*/);
+                                            setState(() {
+                                              downloadEnabled = false;
+                                            });
+                                          },
+                                    child: Icon(
+                                      isDownloaded
+                                          ? Icons.cloud_done
+                                          : Icons.cloud_download,
+                                      color: downloadEnabled
+                                          ? activeIconColor
+                                          : inactiveIconColor,
+                                      size: 30.0,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                SizedBox(
+                                  width: 5.0,
+                                ),
+                                AudioIconButton(
+                                  onTap:
+                                      isPlaying ? () => pause() : () => play(),
+                                  icon: isPlaying
+                                      ? Icons.pause
+                                      : Icons.play_arrow,
+                                  containerSize: 70.0,
+                                ),
+                                Container(
+                                  width: 55.0,
+                                  child: AudioIconButton(
+                                    onTap: isPlaying || isPaused
+                                        ? () => stop()
+                                        : null,
+                                    icon: Icons.stop,
+                                    containerSize: 55.0,
+                                  ),
+                                ),
+                              ],
                             ),
-                            SizedBox(
-                              width: 5.0,
-                            ),
-                            Container(
-                              width: 55.0,
-                              child: AudioIconButton(
-                                onTap:
-                                    isPlaying || isPaused ? () => stop() : null,
-                                icon: Icons.stop,
-                                containerSize: 55.0,
-                              ),
-                            ),
-                            AudioIconButton(
-                              onTap: isPlaying ? () => pause() : () => play(),
-                              icon: isPlaying ? Icons.pause : Icons.play_arrow,
-                              containerSize: 70.0,
+                            Expanded(
+                              flex: 4,
+                              child: Container(),
                             ),
                             Container(
                               width: 35.0,
+                              padding: EdgeInsets.only(right: 10.0),
                               child: GestureDetector(
                                 onTap: () {
                                   /*FirebaseFunctions().updateUserLikedSongs(
@@ -397,7 +416,7 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
                                       l10n,
                                       currentPhase,
                                       currentRecording,
-                                      myLocale);*/
+                                      myLocale); */
                                   setState(() {
                                     isFavorite = !isFavorite;
                                   });
@@ -411,13 +430,15 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
                                       context,
                                       l10n.removedLikedSongsAlert,
                                       Icons.close,
-                                      Colors.green);*/
+                                      Colors.green); */
                                 },
                                 child: Icon(
                                   isFavorite
                                       ? FontAwesomeIcons.solidHeart
                                       : FontAwesomeIcons.heart,
-                                  color: activeIconColor,
+                                  color: isFavorite
+                                      ? kBrandDarkBlue
+                                      : activeIconColor,
                                   size: 25.0,
                                 ),
                               ),

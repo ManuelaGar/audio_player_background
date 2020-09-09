@@ -10,19 +10,15 @@ import 'package:modal_progress_hud/modal_progress_hud.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:rxdart/rxdart.dart';
 
-import 'package:audio_player_background/music_player/audio_player.dart';
 import 'package:audio_player_background/music_player/audio_duration_indicators.dart';
 import 'package:audio_player_background/music_player/audio_icon_button.dart';
+import 'package:audio_player_background/music_player/audio_player.dart';
 
 typedef void OnError(Exception exception);
 enum PlayerState { stopped, playing, paused }
 
-const kMusicTitleTextStyle = TextStyle(
-  //fontFamily: 'Poppins',
-  color: Colors.white,
-  fontWeight: FontWeight.w500,
-  fontSize: 19.0,
-);
+const kActiveIconColor = Colors.white;
+const kInactiveIconColor = Colors.white70;
 
 class PlayMusicScreen extends StatefulWidget {
   PlayMusicScreen({
@@ -76,10 +72,6 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
   List<String> likedSongs;
 
   String localFilePath;
-
-  Color activeIconColor = Colors.white;
-  Color inactiveIconColor = Colors.white70;
-  Color kBrandDarkBlue = Color(0xFF0066B1);
 
   double position = 0.0;
   double duration = 0.0;
@@ -142,30 +134,26 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
               Stream.periodic(Duration(milliseconds: 200)),
               (screenState, _) => screenState).listen((event) {
         if (event?.playbackState?.currentPosition != null) {
-          setState(() {
-            position =
-                event.playbackState.currentPosition.inMilliseconds.toDouble();
-          });
+          double pos =
+              event.playbackState.currentPosition.inMilliseconds.toDouble();
+          showSpinner = false;
+          if (pos > 10) setState(() => position = pos);
         }
       });
 
       _audioPlayerStateSubscription = _screenStateStream.listen((event) async {
         if (event?.playbackState?.processingState != null) {
           if (event.playbackState.processingState ==
-                  AudioProcessingState.ready &&
-              showSpinner) {
-            setState(() {
-              showSpinner = false;
-            });
-          } else if (event.playbackState.processingState ==
                   AudioProcessingState.stopped &&
               !isComplete) {
-            setState(() => playerState = PlayerState.stopped);
+            setState(() {
+              playerState = PlayerState.stopped;
+              position = duration;
+            });
           } else if (event.playbackState.processingState ==
                   AudioProcessingState.completed &&
               !isComplete) {
-            isComplete = true;
-            await AudioService.stop();
+            setState(() => isComplete = true);
             Navigator.pop(context);
           }
         }
@@ -180,11 +168,12 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
   }
 
   @override
-  void dispose() {
-    _audioPlayerStateSubscription.cancel();
-    _positionSubscription.cancel();
-    _player.dispose();
+  void dispose() async {
     super.dispose();
+    _audioPlayerStateSubscription?.cancel();
+    _positionSubscription?.cancel();
+    await AudioService.stop();
+    _player.dispose();
   }
 
   play() {
@@ -233,7 +222,6 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
         isDownloaded = true;
         downloadEnabled = true;
       });
-      //_playLocal();
     }
   }
 
@@ -270,6 +258,11 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
 
   @override
   Widget build(BuildContext context) {
+    /*final l10n = AppLocalizations.of(context);
+
+    Locale myLocale =
+    newLocale != null ? newLocale : Localizations.localeOf(context);*/
+
     return WillPopScope(
       onWillPop: () async => true,
       child: Scaffold(
@@ -291,11 +284,25 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
           ),
           backgroundColor: Colors.transparent,
           elevation: 0,
-          title: Text('Play Music'),
+          title: Text(
+            'Play Music',
+          ),
           leading: BackButton(
             color: Colors.white,
             onPressed: () {
-              AudioService.stop();
+              /*FirebaseFunctions().saveReproductionData(
+                  position, duration, currentPhase, currentRecording, myLocale);*/
+
+              /*if (lastScreen == PainScaleScreen.id ||
+                  lastScreen == AnxietyScaleScreen.id) {
+                int count = 0;
+                Navigator.popUntil(context, (route) {
+                  return count++ == 2;
+                });
+              } else if (lastScreen == SelectMeditationScreen.id ||
+                  lastScreen == BreatheScreen.id ||
+                  lastScreen == MainScreen.id) {
+              }*/
               Navigator.pop(context);
             },
           ),
@@ -328,7 +335,7 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
                   Text(
                     currentRecording,
                     textAlign: TextAlign.center,
-                    style: kMusicTitleTextStyle,
+                    //style: kMusicTitleTextStyle,
                   ),
                   SizedBox(
                     height: 5.0,
@@ -336,7 +343,7 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
                   Text(
                     currentPhase,
                     textAlign: TextAlign.center,
-                    style: kMusicTitleTextStyle,
+                    //style: kMusicTitleTextStyle,
                   ),
                   Container(
                     margin:
@@ -372,8 +379,8 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
                                           ? Icons.cloud_done
                                           : Icons.cloud_download,
                                       color: downloadEnabled
-                                          ? activeIconColor
-                                          : inactiveIconColor,
+                                          ? kActiveIconColor
+                                          : kInactiveIconColor,
                                       size: 30.0,
                                     ),
                                   ),
@@ -415,11 +422,9 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
                                       l10n,
                                       currentPhase,
                                       currentRecording,
-                                      myLocale); */
-                                  setState(() {
-                                    isFavorite = !isFavorite;
-                                  });
-                                  /*isFavorite
+                                      myLocale);
+                                  setState(() => isFavorite = !isFavorite);
+                                  isFavorite
                                       ? showAlertDialog(
                                       context,
                                       l10n.addedLikedSongsAlert,
@@ -429,15 +434,15 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
                                       context,
                                       l10n.removedLikedSongsAlert,
                                       Icons.close,
-                                      Colors.green); */
+                                      Colors.green);*/
                                 },
                                 child: Icon(
                                   isFavorite
                                       ? FontAwesomeIcons.solidHeart
                                       : FontAwesomeIcons.heart,
                                   color: isFavorite
-                                      ? kBrandDarkBlue
-                                      : activeIconColor,
+                                      ? Colors.blueAccent
+                                      : kActiveIconColor,
                                   size: 25.0,
                                 ),
                               ),

@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
@@ -10,7 +9,7 @@ class AudioPlayerTask extends BackgroundAudioTask {
   Seeker _seeker;
   StreamSubscription<PlaybackEvent> _eventSubscription;
 
-  MediaItem audio;
+  MediaItem mediaItem;
 
   @override
   Future<void> onStart(Map<String, dynamic> params) async {
@@ -18,12 +17,11 @@ class AudioPlayerTask extends BackgroundAudioTask {
     await session.configure(AudioSessionConfiguration.speech());
 
     List mediaItems = params['data'];
-    MediaItem mediaItem = MediaItem.fromJson(mediaItems[0]);
+
+    mediaItem = MediaItem.fromJson(mediaItems[0]);
     String audioSource = mediaItems[1];
 
-    AudioServiceBackground.setMediaItem(
-      mediaItem,
-    );
+    AudioServiceBackground.setMediaItem(mediaItem);
 
     _eventSubscription = _player.playbackEventStream.listen((event) {
       _broadcastState();
@@ -32,6 +30,7 @@ class AudioPlayerTask extends BackgroundAudioTask {
     _player.processingStateStream.listen((state) {
       switch (state) {
         case ProcessingState.completed:
+          onStop();
           break;
         case ProcessingState.ready:
           _skipState = null;
@@ -51,27 +50,14 @@ class AudioPlayerTask extends BackgroundAudioTask {
     } catch (e) {
       print("Error: $e");
       onStop();
-      return;
     }
   }
 
   @override
-  Future<void> onPlay() async {
-    AudioServiceBackground.setState(
-        controls: [MediaControl.pause, MediaControl.stop],
-        playing: true,
-        processingState: AudioProcessingState.ready);
-    _player.play();
-  }
+  Future<void> onPlay() => _player.play();
 
   @override
-  Future<void> onPause() async {
-    AudioServiceBackground.setState(
-        controls: [MediaControl.pause, MediaControl.stop],
-        playing: false,
-        processingState: AudioProcessingState.ready);
-    _player.pause();
-  }
+  Future<void> onPause() => _player.pause();
 
   @override
   Future<void> onSeekTo(Duration position) => _player.seek(position);
@@ -90,7 +76,7 @@ class AudioPlayerTask extends BackgroundAudioTask {
 
   @override
   Future<void> onStop() async {
-    await _player.stop();
+    await _player.pause();
     await _player.dispose();
     _eventSubscription.cancel();
     await _broadcastState();
@@ -100,7 +86,7 @@ class AudioPlayerTask extends BackgroundAudioTask {
   Future<void> _seekRelative(Duration offset) async {
     var newPosition = _player.position + offset;
     if (newPosition < Duration.zero) newPosition = Duration.zero;
-    if (newPosition > audio.duration) newPosition = audio.duration;
+    if (newPosition > mediaItem.duration) newPosition = mediaItem.duration;
     await _player.seek(newPosition);
   }
 
@@ -108,7 +94,7 @@ class AudioPlayerTask extends BackgroundAudioTask {
     _seeker?.stop();
     if (begin) {
       _seeker = Seeker(_player, Duration(seconds: 10 * direction),
-          Duration(seconds: 1), audio)
+          Duration(seconds: 1), mediaItem)
         ..start();
     }
   }
@@ -152,6 +138,32 @@ class AudioPlayerTask extends BackgroundAudioTask {
     }
   }
 }
+
+class Sleeper {
+  Completer _blockingCompleter;
+
+  Future<void> sleep([Duration duration]) async {
+    _blockingCompleter = Completer();
+    if (duration != null) {
+      await Future.any([Future.delayed(duration), _blockingCompleter.future]);
+    } else {
+      await _blockingCompleter.future;
+    }
+    final interrupted = _blockingCompleter.isCompleted;
+    _blockingCompleter = null;
+    if (interrupted) {
+      throw SleeperInterruptedException();
+    }
+  }
+
+  void interrupt() {
+    if (_blockingCompleter?.isCompleted == false) {
+      _blockingCompleter.complete();
+    }
+  }
+}
+
+class SleeperInterruptedException {}
 
 class Seeker {
   final AudioPlayer player;

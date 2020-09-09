@@ -14,7 +14,7 @@ dependencies:
   audio_session: ^0.0.4
   cupertino_icons: ^0.1.3
   font_awesome_flutter: ^8.8.1
-  just_audio: ^0.4.1
+  just_audio: ^0.4.0
   modal_progress_hud: ^0.1.3
   path_provider: ^1.6.11
   rxdart: ^0.24.1

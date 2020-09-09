@@ -13,7 +13,6 @@ import 'package:rxdart/rxdart.dart';
 import 'package:audio_player_background/music_player/audio_player.dart';
 import 'package:audio_player_background/music_player/audio_duration_indicators.dart';
 import 'package:audio_player_background/music_player/audio_icon_button.dart';
-import 'package:audio_player_background/music_player/show_alert.dart';
 
 typedef void OnError(Exception exception);
 enum PlayerState { stopped, playing, paused }

@@ -142,6 +142,11 @@ class _PlayMusicScreenState extends State<PlayMusicScreen> {
       });
 
       _audioPlayerStateSubscription = _screenStateStream.listen((event) async {
+        bool playing = event?.playbackState?.playing ?? false;
+        playing
+            ? setState(() => playerState = PlayerState.playing)
+            : setState(() => playerState = PlayerState.paused);
+
         if (event?.playbackState?.processingState != null) {
           if (event.playbackState.processingState ==
                   AudioProcessingState.stopped &&
